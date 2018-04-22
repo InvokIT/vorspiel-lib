@@ -6,7 +6,6 @@ import (
 	"github.com/invokit/go-util/debug"
 	"github.com/invokit/vorspiel-lib/mq"
 	"golang.org/x/net/context"
-	"google.golang.org/api/option"
 	"github.com/rs/xid"
 	"os"
 	"strings"
@@ -14,17 +13,13 @@ import (
 
 var dbg = debug.NewLogger("github.com/invokit/vorspiel-lib/google/mq")
 
-func New(projectId string, apiKey string) (mq.Client, error) {
-	pubsubClient, err := pubsub.NewClient(context.Background(), projectId, option.WithAPIKey(apiKey))
-	if err != nil {
-		dbg.Printf("error when creating pubsub client for project '%s': %s", projectId, err)
-		return nil, err
-	}
-
+// Arguments:
+// * pubsubClient:
+// 		a PubSub Client object from Google API.
+//   	usually created as: pubsub.NewClient(context.Background(), projectId, option.WithAPIKey(apiKey))
+func New(pubsubClient *pubsub.Client) (mq.Client, error) {
 	topics := make(map[string]*Topic)
 	client := &Client{pubsubClient, topics}
-
-	dbg.Printf("creating pubsub client for project '%s'", projectId)
 
 	return client, nil
 }
