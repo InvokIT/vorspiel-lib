@@ -1,4 +1,4 @@
-package googlemq
+package mq
 
 import (
 	"cloud.google.com/go/pubsub"
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-var dbg = debug.NewLogger("github.com/invokit/vorspiel-lib/googlemq")
+var dbg = debug.NewLogger("github.com/invokit/vorspiel-lib/google/mq")
 
 func New(projectId string, apiKey string) (mq.Client, error) {
 	pubsubClient, err := pubsub.NewClient(context.Background(), projectId, option.WithAPIKey(apiKey))
