@@ -17,11 +17,11 @@ var dbg = debug.NewLogger("github.com/invokit/vorspiel-lib/google/mq")
 // * pubsubClient:
 // 		a PubSub Client object from Google API.
 //   	usually created as: pubsub.NewClient(context.Background(), projectId, option.WithAPIKey(apiKey))
-func New(pubsubClient *pubsub.Client) (mq.Client, error) {
+func New(pubsubClient *pubsub.Client) (mq.Client) {
 	topics := make(map[string]*Topic)
 	client := &Client{pubsubClient, topics}
 
-	return client, nil
+	return client
 }
 
 type Client struct {
