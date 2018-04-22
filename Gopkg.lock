@@ -39,7 +39,7 @@
   branch = "master"
   name = "github.com/invokit/go-util"
   packages = ["debug"]
-  revision = "90edc2b9801a767abc8519d51b4b838114a4bcf9"
+  revision = "87b1fdf3640c0a8f38dfea4a616d99a229696725"
 
 [[projects]]
   name = "github.com/rs/xid"
@@ -205,6 +205,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "cae08f52fffc9b808f4dcadd863ff6a0ad5bbf947d9ad66c5449156c50ea51fb"
+  inputs-digest = "b80b2505b3d4e8a6e84d3c8655576cfe3609eb415890a5cba8ed4444949e62b6"
   solver-name = "gps-cdcl"
   solver-version = 1
