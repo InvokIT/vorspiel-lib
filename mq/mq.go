@@ -10,6 +10,8 @@ type Client interface {
 }
 
 type Topic interface {
+	Name() string
+
 	// Publish a message on the Topic. Blocks until the message has been sent.
 	Publish(ctx context.Context, data []byte, attributes map[string]string) error
 
@@ -22,11 +24,13 @@ type Topic interface {
 	Subscribe(ctx context.Context, subscriptionName string, subscriber Subscriber) error
 
 	// Create a new unique subscription that will receive all messages on the Topic.
-	Listen(ctx context.Context, subscriptionNamePrefix string, subscriber Subscriber) error
+	Listen(ctx context.Context, subscriber Subscriber) error
+
+	// Create a new subscription that will delete itself after the first acknowledged message
+	ListenOnce(ctx context.Context, subscriber Subscriber) error
 }
 
-// msg will automatically be acknowledged if an error is not returned
-type Subscriber func(msg Message) error
+type Subscriber func(msg Message) (ack bool)
 
 type Message struct {
 	Data       []byte

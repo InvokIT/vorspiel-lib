@@ -19,12 +19,13 @@ var dbg = debug.NewLogger("github.com/invokit/vorspiel-lib/google/mq")
 //   	usually created as: pubsub.NewClient(context.Background(), projectId, option.WithAPIKey(apiKey))
 func New(pubsubClient *pubsub.Client) (mq.Client) {
 	topics := make(map[string]*Topic)
-	client := &Client{pubsubClient, topics}
+	client := &Client{GenerateSubscriptionNameFromHostname, pubsubClient, topics}
 
 	return client
 }
 
 type Client struct {
+	SubscriptionNameGenerator func(topic mq.Topic) string
 	pubsubClient *pubsub.Client
 	topics       map[string]*Topic
 }
@@ -48,6 +49,10 @@ func (client *Client) Close() error {
 type Topic struct {
 	client      *Client
 	pubsubTopic *pubsub.Topic
+}
+
+func (topic *Topic) Name() string {
+	return topic.pubsubTopic.ID()
 }
 
 func (topic *Topic) CreateSubscription(ctx context.Context, subscriptionName string) error {
@@ -97,8 +102,8 @@ func (topic *Topic) Subscribe(ctx context.Context, subscriptionName string, subs
 	return nil
 }
 
-func (topic *Topic) Listen(ctx context.Context, subscriptionNamePrefix string, subscriber mq.Subscriber) error {
-	subscriptionName := generateUniqueSubscriptionName(subscriptionNamePrefix)
+func (topic *Topic) Listen(ctx context.Context, subscriber mq.Subscriber) error {
+	subscriptionName := topic.client.SubscriptionNameGenerator(topic)
 
 	subscription, err := topic.client.pubsubClient.CreateSubscription(ctx, subscriptionName, pubsub.SubscriptionConfig{Topic: topic.pubsubTopic})
 	if err != nil {
@@ -122,13 +127,17 @@ func (topic *Topic) Listen(ctx context.Context, subscriptionNamePrefix string, s
 	return nil
 }
 
+func (topic *Topic) ListenOnce(ctx context.Context, subscriber mq.Subscriber) error {
+	// TODO
+}
+
 func receive(ctx context.Context, subscription *pubsub.Subscription, subscriber mq.Subscriber) {
 	for ctx.Err() == nil {
 		err := subscription.Receive(ctx, func(ctx context.Context, message *pubsub.Message) {
 			dbg.Printf("received message '%s' from subscription '%s'", message.ID, subscription.ID())
 
-			err := subscriber(mq.Message{Data: message.Data, Attributes: message.Attributes})
-			if err == nil {
+			ack := subscriber(mq.Message{Data: message.Data, Attributes: message.Attributes})
+			if ack {
 				dbg.Printf("ack'ing message '%s' from subscription '%s'", message.ID, subscription.ID())
 				message.Ack()
 			} else {
@@ -144,13 +153,8 @@ func receive(ctx context.Context, subscription *pubsub.Subscription, subscriber 
 	dbg.Printf("stopped receiving messages from subscription '%s'", subscription.ID())
 }
 
-func generateUniqueSubscriptionName(prefix string) string {
+func GenerateSubscriptionNameFromHostname(topic mq.Topic) string {
 	var nameBuilder strings.Builder
-
-	if prefix != "" {
-		nameBuilder.WriteString(prefix)
-		nameBuilder.WriteRune('-')
-	}
 
 	if hostname, err := os.Hostname(); err != nil {
 		nameBuilder.WriteString(hostname)
@@ -159,6 +163,11 @@ func generateUniqueSubscriptionName(prefix string) string {
 		dbg.Printf("unable to get hostname: %s", err)
 	}
 
+	nameBuilder.WriteString(topic.Name())
+
+	nameBuilder.WriteString("-subscriber")
+
+	nameBuilder.WriteRune('-')
 	nameBuilder.WriteString(xid.New().String())
 
 	name := nameBuilder.String()
