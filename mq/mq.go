@@ -20,17 +20,16 @@ type Topic interface {
 
 	DeleteSubscription(ctx context.Context, subscriptionName string) error
 
-	// Subscribe to an existing subscription. Messages on a subscription will be sent to a random subscriber.
+	// Subscribe to an existing subscription. Only one subscriper of a subscription will receive a specific message on the topic.
 	Subscribe(ctx context.Context, subscriptionName string, subscriber Subscriber) error
 
 	// Create a new unique subscription that will receive all messages on the Topic.
 	Listen(ctx context.Context, subscriber Subscriber) error
-
-	// Create a new subscription that will delete itself after the first acknowledged message
-	ListenOnce(ctx context.Context, subscriber Subscriber) error
 }
 
-type Subscriber func(msg Message) (ack bool)
+// Subscribers run in its own goroutine
+// if an error is not thrown the message is acknowledged
+type Subscriber func(msg Message) (err error)
 
 type Message struct {
 	Data       []byte

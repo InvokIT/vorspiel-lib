@@ -7,11 +7,13 @@ import (
 	"github.com/invokit/vorspiel-lib/mq"
 	"golang.org/x/net/context"
 	"github.com/rs/xid"
+	"log"
 	"os"
 	"strings"
 )
 
 var dbg = debug.NewLogger("github.com/invokit/vorspiel-lib/google/mq")
+var logger = log.New(os.Stderr, "", log.LstdFlags | log.Llongfile)
 
 // Arguments:
 // * pubsubClient:
@@ -97,7 +99,7 @@ func (topic *Topic) Subscribe(ctx context.Context, subscriptionName string, subs
 		return fmt.Errorf("subscription '%s' on topic '%s' does not exist", subscriptionName, topic.pubsubTopic.ID())
 	}
 
-	go receive(ctx, subscription, subscriber)
+	go receiveLoop(ctx, subscription, subscriber)
 
 	return nil
 }
@@ -111,7 +113,7 @@ func (topic *Topic) Listen(ctx context.Context, subscriber mq.Subscriber) error 
 		return err
 	}
 
-	go receive(ctx, subscription, subscriber)
+	go receiveLoop(ctx, subscription, subscriber)
 
 	go func() {
 		// When the context is done delete the subscription
@@ -127,26 +129,22 @@ func (topic *Topic) Listen(ctx context.Context, subscriber mq.Subscriber) error 
 	return nil
 }
 
-func (topic *Topic) ListenOnce(ctx context.Context, subscriber mq.Subscriber) error {
-	// TODO
-}
-
-func receive(ctx context.Context, subscription *pubsub.Subscription, subscriber mq.Subscriber) {
+func receiveLoop(ctx context.Context, subscription *pubsub.Subscription, subscriber mq.Subscriber) {
 	for ctx.Err() == nil {
 		err := subscription.Receive(ctx, func(ctx context.Context, message *pubsub.Message) {
 			dbg.Printf("received message '%s' from subscription '%s'", message.ID, subscription.ID())
 
-			ack := subscriber(mq.Message{Data: message.Data, Attributes: message.Attributes})
-			if ack {
+			err := subscriber(ctx, mq.Message{Data: message.Data, Attributes: message.Attributes})
+			if err != nil {
 				dbg.Printf("ack'ing message '%s' from subscription '%s'", message.ID, subscription.ID())
 				message.Ack()
 			} else {
-				dbg.Printf("nack'ing message '%s' from subscription '%s' because of error: %s", message.ID, subscription.ID(), err)
+				logger.Printf("nack'ing message '%s' from subscription '%s' because of error: %s", message.ID, subscription.ID(), err)
 				message.Nack()
 			}
 		})
 		if err != nil {
-			dbg.Printf("error when receiving messages from subscription '%s': %s", subscription.ID(), err)
+			logger.Printf("error when receiving messages from subscription '%s': %s", subscription.ID(), err)
 		}
 	}
 
@@ -156,16 +154,16 @@ func receive(ctx context.Context, subscription *pubsub.Subscription, subscriber 
 func GenerateSubscriptionNameFromHostname(topic mq.Topic) string {
 	var nameBuilder strings.Builder
 
-	if hostname, err := os.Hostname(); err != nil {
-		nameBuilder.WriteString(hostname)
-		nameBuilder.WriteRune('-')
-	} else {
-		dbg.Printf("unable to get hostname: %s", err)
-	}
-
 	nameBuilder.WriteString(topic.Name())
 
 	nameBuilder.WriteString("-subscriber")
+
+	if hostname, err := os.Hostname(); err != nil {
+		nameBuilder.WriteRune('-')
+		nameBuilder.WriteString(hostname)
+	} else {
+		logger.Printf("unable to get hostname: %s", err)
+	}
 
 	nameBuilder.WriteRune('-')
 	nameBuilder.WriteString(xid.New().String())
