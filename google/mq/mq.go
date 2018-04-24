@@ -99,7 +99,7 @@ func (topic *Topic) Subscribe(ctx context.Context, subscriptionName string, subs
 		return fmt.Errorf("subscription '%s' on topic '%s' does not exist", subscriptionName, topic.pubsubTopic.ID())
 	}
 
-	go receiveLoop(ctx, subscription, subscriber)
+	go receive(ctx, subscription, subscriber)
 
 	return nil
 }
@@ -113,7 +113,7 @@ func (topic *Topic) Listen(ctx context.Context, subscriber mq.Subscriber) error 
 		return err
 	}
 
-	go receiveLoop(ctx, subscription, subscriber)
+	go receive(ctx, subscription, subscriber)
 
 	go func() {
 		// When the context is done delete the subscription
@@ -122,30 +122,28 @@ func (topic *Topic) Listen(ctx context.Context, subscriber mq.Subscriber) error 
 		if err := subscription.Delete(context.Background()); err == nil {
 			dbg.Printf("deleted subscription '%s' on topic '%s'", subscriptionName, topic.pubsubTopic.ID())
 		} else {
-			dbg.Printf("error when deleting subscription '%s' on topic '%s'", subscriptionName, topic.pubsubTopic.ID())
+			logger.Printf("error when deleting subscription '%s' on topic '%s'", subscriptionName, topic.pubsubTopic.ID())
 		}
 	}()
 
 	return nil
 }
 
-func receiveLoop(ctx context.Context, subscription *pubsub.Subscription, subscriber mq.Subscriber) {
-	for ctx.Err() == nil {
-		err := subscription.Receive(ctx, func(ctx context.Context, message *pubsub.Message) {
-			dbg.Printf("received message '%s' from subscription '%s'", message.ID, subscription.ID())
+func receive(ctx context.Context, subscription *pubsub.Subscription, subscriber mq.Subscriber) {
+	err := subscription.Receive(ctx, func(ctx context.Context, message *pubsub.Message) {
+		dbg.Printf("received message '%s' from subscription '%s'", message.ID, subscription.ID())
 
-			err := subscriber(ctx, mq.Message{Data: message.Data, Attributes: message.Attributes})
-			if err != nil {
-				dbg.Printf("ack'ing message '%s' from subscription '%s'", message.ID, subscription.ID())
-				message.Ack()
-			} else {
-				logger.Printf("nack'ing message '%s' from subscription '%s' because of error: %s", message.ID, subscription.ID(), err)
-				message.Nack()
-			}
-		})
+		err := subscriber(ctx, mq.Message{Data: message.Data, Attributes: message.Attributes})
 		if err != nil {
-			logger.Printf("error when receiving messages from subscription '%s': %s", subscription.ID(), err)
+			dbg.Printf("ack'ing message '%s' from subscription '%s'", message.ID, subscription.ID())
+			message.Ack()
+		} else {
+			logger.Printf("nack'ing message '%s' from subscription '%s' because of error: %s", message.ID, subscription.ID(), err)
+			message.Nack()
 		}
+	})
+	if err != nil && err != context.Canceled {
+		logger.Printf("error when receiving messages from subscription '%s': %s", subscription.ID(), err)
 	}
 
 	dbg.Printf("stopped receiving messages from subscription '%s'", subscription.ID())
